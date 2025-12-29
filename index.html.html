@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Almacén Pintura Pro + Compartir</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        body { background-color: #f0f2f5; padding-top: 70px; padding-bottom: 20px; font-family: sans-serif; }
+        
+        .navbar-app {
+            position: fixed; top: 0; left: 0; right: 0; height: 65px;
+            background-color: #2c3e50; color: white; z-index: 1000;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .record-card {
+            background: white; border-radius: 12px; padding: 15px;
+            margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-left: 5px solid #3498db; position: relative;
+        }
+
+        .record-header { display: flex; justify-content: space-between; font-size: 0.85rem; color: #7f8c8d; }
+        .record-main { font-size: 1.1rem; font-weight: bold; color: #2c3e50; margin-top: 5px; }
+        .btn-delete-card { background: none; border: none; color: #e74c3c; font-size: 1.2rem; }
+
+        .material-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
+
+        /* Botones de acción superior */
+        .nav-actions .btn { margin-left: 5px; border-radius: 8px; }
+
+        /* Inputs móvil */
+        .form-control, .form-select { padding: 12px; font-size: 16px; border-radius: 10px; border: 1px solid #ddd; }
+        .btn-lg-app { padding: 14px; font-size: 18px; font-weight: bold; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="navbar-app">
+        <h5 class="m-0">🎨 Mi Almacén</h5>
+        <div class="nav-actions">
+            <button class="btn btn-success btn-sm" onclick="shareWeeklySummary()" title="Compartir Reporte">
+                <i class="bi bi-share-fill"></i> Reporte
+            </button>
+            <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                <i class="bi bi-gear-fill"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="container">
+        
+        <div class="card shadow-sm mb-4 border-0">
+            <div class="card-body">
+                <form id="mobileForm">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" id="empName" placeholder="Nombre de quien retira" required>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-8">
+                            <select class="form-select" id="matType" required>
+                                <option value="" disabled selected>Material...</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <input type="number" inputmode="numeric" class="form-control text-center" id="qty" value="1" min="1" required>
+                        </div>
+                    </div>
+                    
+                    <div class="my-3">
+                        <input type="text" class="form-control" id="note" placeholder="Proyecto / Nota (opcional)">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 btn-lg-app shadow">REGISTRAR SALIDA</button>
+                </form>
+            </div>
+        </div>
+
+        <h6 class="text-muted ms-1 mb-3">MOVIMIENTOS RECIENTES</h6>
+        <div id="cardsContainer"></div>
+        <p id="noDataMsg" class="text-center text-muted mt-5">No hay registros guardados.</p>
+
+    </div>
+
+    <div class="modal fade" id="settingsModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Configurar Materiales</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="newMaterialInput" placeholder="Nuevo material...">
+                        <button class="btn btn-primary" onclick="addNewMaterial()">Añadir</button>
+                    </div>
+                    <div id="materialsListConfig" class="border rounded"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- GESTIÓN DE MATERIALES ---
+        let materials = JSON.parse(localStorage.getItem('paintMaterials')) || ["Pintura Blanca", "Pintura Color", "Brocha 4\"", "Rodillo", "Lija", "Thinner"];
+
+        function initMaterials() {
+            const select = document.getElementById('matType');
+            const config = document.getElementById('materialsListConfig');
+            
+            select.innerHTML = '<option value="" disabled selected>Seleccionar Material...</option>';
+            config.innerHTML = '';
+
+            materials.sort().forEach((m, idx) => {
+                // Llenar select
+                select.innerHTML += `<option value="${m}">${m}</option>`;
+                // Llenar modal
+                config.innerHTML += `
+                    <div class="material-item">
+                        <span>${m}</span>
+                        <button class="btn btn-sm text-danger" onclick="deleteMaterial(${idx})"><i class="bi bi-x-circle-fill"></i></button>
+                    </div>`;
+            });
+            localStorage.setItem('paintMaterials', JSON.stringify(materials));
+        }
+
+        function addNewMaterial() {
+            const val = document.getElementById('newMaterialInput').value.trim();
+            if(val) {
+                materials.push(val);
+                document.getElementById('newMaterialInput').value = '';
+                initMaterials();
+            }
+        }
+
+        function deleteMaterial(idx) {
+            if(confirm('¿Eliminar material de la lista?')) {
+                materials.splice(idx, 1);
+                initMaterials();
+            }
+        }
+
+        // --- GESTIÓN DE HISTORIAL ---
+        let history = JSON.parse(localStorage.getItem('paintHistory')) || [];
+
+        function saveAndRender() {
+            localStorage.setItem('paintHistory', JSON.stringify(history));
+            const container = document.getElementById('cardsContainer');
+            const noData = document.getElementById('noDataMsg');
+            
+            container.innerHTML = '';
+            if(history.length === 0) {
+                noData.style.display = 'block';
+                return;
+            }
+            noData.style.display = 'none';
+
+            history.slice().reverse().forEach((reg) => {
+                container.innerHTML += `
+                    <div class="record-card" data-id="${reg.id}">
+                        <div class="record-header">
+                            <span>${reg.date} - ${reg.time}</span>
+                            <button class="btn-delete-card" onclick="deleteReg(${reg.id})">×</button>
+                        </div>
+                        <div class="record-main">${reg.mat} <span class="badge bg-info text-dark">x${reg.qty}</span></div>
+                        <div class="small mt-1">👤 ${reg.emp} ${reg.note ? `| 📝 ${reg.note}` : ''}</div>
+                    </div>`;
+            });
+        }
+
+        document.getElementById('mobileForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const now = new Date();
+            const newReg = {
+                id: Date.now(),
+                timestamp: now.getTime(),
+                date: now.toLocaleDateString(),
+                time: now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                emp: document.getElementById('empName').value,
+                mat: document.getElementById('matType').value,
+                qty: parseInt(document.getElementById('qty').value),
+                note: document.getElementById('note').value
+            };
+            history.push(newReg);
+            e.target.reset();
+            document.getElementById('qty').value = 1;
+            saveAndRender();
+        });
+
+        function deleteReg(id) {
+            if(confirm('¿Borrar este registro?')) {
+                history = history.filter(h => h.id !== id);
+                saveAndRender();
+            }
+        }
+
+        // --- FUNCIÓN DE COMPARTIR REPORTE SEMANAL ---
+        function shareWeeklySummary() {
+            if(history.length === 0) {
+                alert("No hay datos para generar el reporte.");
+                return;
+            }
+
+            const hoy = new Date();
+            const haceSieteDias = hoy.getTime() - (7 * 24 * 60 * 60 * 1000);
+            
+            // Filtrar registros de la última semana
+            const registrosSemana = history.filter(h => h.timestamp >= haceSieteDias);
+
+            if(registrosSemana.length === 0) {
+                alert("No hay movimientos en los últimos 7 días.");
+                return;
+            }
+
+            // Agrupar por material
+            const resumen = {};
+            registrosSemana.forEach(r => {
+                resumen[r.mat] = (resumen[r.mat] || 0) + r.qty;
+            });
+
+            // Construir el mensaje de texto
+            let mensaje = `📊 *RESUMEN SEMANAL DE ALMACÉN*\n`;
+            mensaje += `📅 Periodo: ${new Date(haceSieteDias).toLocaleDateString()} al ${hoy.toLocaleDateString()}\n\n`;
+            mensaje += `*TOTAL MATERIALES RETIRADOS:*\n`;
+            
+            for (const [mat, cant] of Object.entries(resumen)) {
+                mensaje += `• ${mat}: ${cant}\n`;
+            }
+
+            mensaje += `\n_Generado desde App Almacén Pintura_`;
+
+            // Usar Web Share API si está disponible (móviles)
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Resumen Semanal Almacén',
+                    text: mensaje
+                }).catch(console.error);
+            } else {
+                // Fallback: Abrir WhatsApp directamente o copiar al portapapeles
+                const url = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+                window.open(url, '_blank');
+            }
+        }
+
+        // Inicializar app
+        initMaterials();
+        saveAndRender();
+    </script>
+</body>
+</html>
